@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
+import { db } from "../firebase";
+import { collection, getDocs, addDoc, writeBatch } from "firebase/firestore";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, LineChart, Line, ResponsiveContainer,
@@ -58,14 +60,6 @@ const SURVEYS: Record<SurveyType, { title: string; desc: string; questions: stri
 };
 
 const ADMIN_PIN = "2024";
-const STORAGE_KEY = "biblioteca_encuestas_v1";
-
-function loadResponses(): SurveyResponse[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
-}
-function persistResponses(data: SurveyResponse[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
 
 // ─── Background orbs ──────────────────────────────────────────────────────────
 
@@ -273,9 +267,29 @@ export default function App() {
   const [adminError, setAdminError] = useState(false);
   const [adminTab, setAdminTab] = useState<AdminTab>("charts");
   const [historyFilter, setHistoryFilter] = useState<SurveyType | "all">("all");
-  const [responses, setResponses] = useState<SurveyResponse[]>(loadResponses);
+  const [responses, setResponses] = useState<SurveyResponse[]>([]);
   // transient state to animate face selection before advancing
   const [pendingRating, setPendingRating] = useState<Rating | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Cargar respuestas desde Firestore al montar el componente
+  useEffect(() => {
+    const fetchResponses = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, "responses"));
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as SurveyResponse[];
+        setResponses(data);
+      } catch (err) {
+        console.error("Error al cargar datos de Firestore:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchResponses();
+  }, []);
 
   const survey = surveyType ? SURVEYS[surveyType] : null;
   const totalQuestions = survey?.questions.length ?? 0;
@@ -310,18 +324,24 @@ export default function App() {
     }, 420);
   }
 
-  function saveAndFinish(comment?: string) {
+  async function saveAndFinish(comment?: string) {
     if (!surveyType) return;
-    const response: SurveyResponse = {
-      id: crypto.randomUUID(),
+    const responseData: Omit<SurveyResponse, "id"> = {
       type: surveyType,
       date: new Date().toISOString().split("T")[0],
       answers: answers as Rating[],
-      comment: comment?.trim() || undefined,
+      ...(comment?.trim() ? { comment: comment.trim() } : {}),
     };
-    const updated = [...responses, response];
-    setResponses(updated);
-    persistResponses(updated);
+    try {
+      const docRef = await addDoc(collection(db, "responses"), responseData);
+      const newResponse: SurveyResponse = { id: docRef.id, ...responseData };
+      setResponses((prev) => [...prev, newResponse]);
+    } catch (err) {
+      console.error("Error al guardar en Firestore:", err);
+      // Fallback local si Firestore no está disponible
+      const newResponse: SurveyResponse = { id: crypto.randomUUID(), ...responseData };
+      setResponses((prev) => [...prev, newResponse]);
+    }
     setView("thanks");
   }
 
@@ -359,10 +379,17 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
-  function clearData() {
+  async function clearData() {
     if (window.confirm("¿Eliminar todos los datos de encuestas? Esta acción no se puede deshacer.")) {
-      setResponses([]);
-      localStorage.removeItem(STORAGE_KEY);
+      try {
+        const snapshot = await getDocs(collection(db, "responses"));
+        const batch = writeBatch(db);
+        snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+        setResponses([]);
+      } catch (err) {
+        console.error("Error al eliminar datos de Firestore:", err);
+      }
     }
   }
 
@@ -423,6 +450,32 @@ export default function App() {
     "px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] focus:outline-none";
 
   // ── Views ─────────────────────────────────────────────────────────────────────
+
+  // LOADING
+  if (loading) {
+    return (
+      <div
+        className="min-h-screen relative flex items-center justify-center"
+        style={{ background: "#F3F6FB", fontFamily: "Inter, system-ui, sans-serif" }}
+      >
+        <BgOrbs />
+        <div className="relative z-10 flex flex-col items-center gap-4">
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              border: "3px solid rgba(10,132,255,0.18)",
+              borderTopColor: "#0A84FF",
+              animation: "fb-spin 0.75s linear infinite",
+            }}
+          />
+          <p className="text-sm font-medium" style={{ color: "#5A6480" }}>Cargando datos…</p>
+        </div>
+        <style>{`@keyframes fb-spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   // HOME
   if (view === "home") {
