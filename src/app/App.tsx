@@ -433,7 +433,28 @@ export default function App() {
     responses.filter((r) => r.comment).map((r) => ({ type: r.type, date: r.date, text: r.comment! })).reverse(),
     [responses]);
 
-  const ratingEmoji = (v: number) => v === 3 ? "S" : v === 2 ? "R" : "I";
+  const ratingBadge = (v: number) => {
+    const label = v === 3 ? "S" : v === 2 ? "R" : "I";
+    const color = v === 3 ? "#34C759" : v === 2 ? "#FF9F0A" : "#FF453A";
+    const bg    = v === 3 ? "rgba(52,199,89,0.12)" : v === 2 ? "rgba(255,159,10,0.12)" : "rgba(255,69,58,0.12)";
+    return (
+      <span
+        style={{
+          display: "inline-block",
+          color,
+          background: bg,
+          fontWeight: 700,
+          fontSize: 11,
+          lineHeight: 1,
+          padding: "3px 7px",
+          borderRadius: 6,
+          letterSpacing: "0.04em",
+        }}
+      >
+        {label}
+      </span>
+    );
+  };
 
   // ── Shared style helpers ──────────────────────────────────────────────────────
 
@@ -1019,8 +1040,8 @@ export default function App() {
                         return (
                           <tr key={r.id} className="transition-colors hover:bg-white/20" style={{ borderBottom: "1px solid rgba(255,255,255,0.35)" }}>
                             <td className="px-4 py-3 font-mono text-xs" style={{ color: "#5A6480" }}>{r.date}</td>
-                            <td className="px-4 py-3 text-xs whitespace-nowrap">{SURVEYS[r.type].title}</td>
-                            {r.answers.map((a, i) => <td key={i} className="px-4 py-3 text-center">{ratingEmoji(a)}</td>)}
+                            <td className="px-4 py-3 text-xs whitespace-nowrap font-bold">{SURVEYS[r.type].title}</td>
+                            {r.answers.map((a, i) => <td key={i} className="px-4 py-3 text-center">{ratingBadge(a)}</td>)}
                             <td className="px-4 py-3 text-center font-mono font-bold text-sm" style={{ color: "#0A84FF" }}>{avg}</td>
                             <td className="px-4 py-3 text-xs max-w-[160px] truncate" style={{ color: "#5A6480" }}>{r.comment ?? "—"}</td>
                           </tr>
