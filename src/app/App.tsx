@@ -429,7 +429,7 @@ export default function App() {
           <div>
             <p className="text-[10px] font-mono tracking-[0.18em] uppercase mb-0.5" style={{ color: "rgba(10,132,255,0.7)" }}>
               Centro Integral de Documentación · CUCEI
-            </p>s
+            </p>
             <h1 className="text-lg font-semibold text-foreground">Encuesta de Satisfacción</h1>
           </div>
           <button
